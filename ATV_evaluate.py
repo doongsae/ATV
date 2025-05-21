@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from collections import defaultdict
 from utils.model_utils import seed_everything
-from train_retriever import *
 import re
 import argparse
 import pandas as pd

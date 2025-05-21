@@ -153,9 +153,9 @@ class ResultAnalyzer:
             (float(data['clean_time'])/len(data["generation"])))
         metrics["intervene_time"].append(
             (float(data['intervene_time'])/len(data["generation"])))
-        if "retrieve_time" in data.keys():
-            metrics["retrieve_time"].append(
-                (float(data["retrieve_time"])/len(data["generation"])))
+        # if "retrieve_time" in data.keys():
+        #     metrics["retrieve_time"].append(
+        #         (float(data["retrieve_time"])/len(data["generation"])))
         metrics["zs_length"].append(float(data['zs_lengths']))
 
         # Calculate chosen state numbers
@@ -237,6 +237,7 @@ class ResultAnalyzer:
         final_all_averages = { key: self.safe_mean(all_averages[key]) for key in headers[2:] }
 
         return final_all_averages, all_averages, unseen_averages
+
 
     def _plot_layer_distribution(self, valid_best_layers):
         """Plot distribution of best layers"""
@@ -328,29 +329,47 @@ class ResultAnalyzer:
                     dpi=300, bbox_inches='tight')
         plt.close()
 
+    def _process_unseen_time_list(self, unseen, unseen_time_dict, all_results):
+        """Process time statistics for unseen datasets"""
+        for c in unseen:
+            unseen_time_dict[c]["clean_time"] = all_results["unseen"][c]["0shot_time"]
+            unseen_time_dict[c]["intervene_time"] = all_results["unseen"][c]["intervene_time"]
+            if "retrieve_time" in all_results["unseen"][c]:
+                unseen_time_dict[c]["retrieve_time"] = all_results["unseen"][c]["retrieve_time"]
+            if len(all_results["unseen"][c]["bm25_time"]) > 0 and f"{nshots}shot_time" in all_results["unseen"][c]:
+                unseen_time_dict[c]["bm25_infer_time"] = all_results["unseen"][c]["bm25_time"]
+                unseen_time_dict[c][f"{nshots}shot_time"] = all_results["unseen"][c][f"{nshots}shot_time"]
+
+    def _process_unseen_chosen_states(self, unseen, unseen_chosen_states_nums, all_results):
+        """Process chosen states statistics for unseen datasets"""
+        for c in unseen:
+            unseen_chosen_states_nums[c]["chosen_nums"] = all_results['unseen'][c]["chosen_state_num"]
+
     def analyze_multiple_dirs(self, result_dirs):
-        category = ["nlu", "reasoning", "knowledge", "math", "safety"]
+        """Analyze multiple result directories for unseen datasets"""
+        unseen = ["glue_cola", "bbq_religion", "deepmind",
+                  "mmlu_high_school_psychology", "bbh_logical_deduction_five_objects"]
         
-        aggregate_results = self.nested_dict()
-        chosen_states_nums = self.nested_dict()
-        time_dict = self.nested_dict()
+        unseen_results = self.nested_dict()
+        unseen_chosen_states_nums = self.nested_dict()
+        unseen_time_dict = self.nested_dict()
         used_states = []
         
         for results_dir in result_dirs:
-            eval_results, all_averages, _, all_results, used_states_list = self.analyze_results(
+            _, _, unseen_averages, all_results, used_states_list = self.analyze_results(
                 results_dir)
             used_states += used_states_list
 
-            # process chosen states numbers 
-            self._process_chosen_states(
-                category, chosen_states_nums, all_averages)
+            # process chosen states numbers for unseen datasets
+            self._process_unseen_chosen_states(
+                unseen, unseen_chosen_states_nums, all_results)
 
-            # process time
-            self._process_time_list(category, time_dict, all_averages)
+            # process time for unseen datasets
+            self._process_unseen_time_list(
+                unseen, unseen_time_dict, all_results)
                
-            # process results
-            self._process_results(eval_results, aggregate_results,
-                                  category, all_averages, all_results)    
+            # process results for unseen datasets
+            self._process_results(unseen_results, unseen, unseen_averages, all_results)    
                
         # generate results report
         count_states = Counter(used_states)
@@ -365,7 +384,7 @@ class ResultAnalyzer:
         plt.ylabel('Type of Task Vector', fontsize=16)
         plt.tick_params(axis='both', which='major', labelsize=12)
 
-        plt.title('Usage Frequency Distribution of different task vectors', fontsize=20, pad=20)
+        plt.title('Usage Frequency Distribution (Unseen Datasets)', fontsize=20, pad=20)
 
         # add numerical labels
         for i, v in enumerate(df['count']):
@@ -373,160 +392,97 @@ class ResultAnalyzer:
 
         plt.tight_layout()
         plt.show()
-        # plt.savefig("used_states_distribution.png")
-        self._generate_results_report(aggregate_results, chosen_states_nums, time_dict)
+        # plt.savefig("used_states_distribution_unseen.png")
+        self._generate_results_report(unseen_results, unseen_chosen_states_nums, unseen_time_dict)
 
-    def _process_time_list(self, category, time_dict, all_averages):
-        for i, c in enumerate(category):
-            time_dict[c]["clean_time"].append(all_averages["0shot_time"][i])
-            time_dict[c]["intervene_time"].append(
-                all_averages["intervene_time"][i])
-            # if "retrieve_time" in all_averages.keys():
-            #     time_dict[c]["retrieve_time"].append(
-            #         all_averages["retrieve_time"][i])
-            if len(all_averages["bm25_time"])>0 and len(all_averages[f"{nshots}shot_time"])>0:
-                time_dict[c]["bm25_infer_time"].append(all_averages["bm25_time"][i])
-                time_dict[c][f"{nshots}shot_time"].append(all_averages[f"{nshots}shot_time"][i])
-
-    def _process_chosen_states(self, category, chosen_states_nums, all_averages):
-        """process chosen states statistics"""
-        for i, c in enumerate(category):
-            chosen_states_nums[c]["chosen_nums"].append(
-                all_averages["chosen_state_num"][i])
-
-    def _process_results(self, eval_results, aggregate_results, category, 
-                         all_averages, all_results):
-        """process results - Ours only"""
-        # process length data - Ours only
-        aggregate_results["Length"]["Ours"].append(eval_results['zs_length'])
+    def _process_results(self, unseen_results, unseen, unseen_averages, all_results):
+        """Process results for unseen datasets - including only Ours and zs"""
+        # Process results for each unseen dataset
+        for u in unseen:
+            # Length data
+            if "zs" not in unseen_results or "Length" not in unseen_results["zs"]:
+                unseen_results["zs"]["Length"] = []
+                unseen_results["Ours"]["Length"] = []
+            
+            if len(all_results['unseen'][u]["zs_length"]) > 0:
+                unseen_results["zs"]["Length"].append(
+                    sum(all_results['unseen'][u]["zs_length"]) /
+                    len(all_results['unseen'][u]["zs_length"])
+                )
+                unseen_results["Ours"]["Length"].append(
+                    sum(all_results['unseen'][u]["zs_length"]) /
+                    len(all_results['unseen'][u]["zs_length"])
+                )
+            
+            # Save results for each dataset
+            if u not in unseen_results["zs"]:
+                unseen_results["zs"][u] = []
+                unseen_results["Ours"][u] = []
+            
+            # Accuracy data
+            if len(all_results['unseen'][u]["test_zero_acc"]) > 0:
+                unseen_results["zs"][u].append(
+                    sum(all_results['unseen'][u]["test_zero_acc"]) /
+                    len(all_results['unseen'][u]["test_zero_acc"]) * 100
+                )
+                unseen_results["Ours"][u].append(
+                    sum(all_results['unseen'][u]["test_intervene_acc"]) /
+                    len(all_results['unseen'][u]["test_intervene_acc"]) * 100
+                )
         
-        # process results - Ours only
-        for i, c in enumerate(category):
-            # Ours only
-            aggregate_results[c]["Ours"].append(all_averages['test_intervene_acc'][i])
-
-        # process average value - Ours only
-        aggregate_results["avg"]["Ours"].append(eval_results['test_intervene_acc'])
-
-    def _generate_results_report(self, aggregate_results, chosen_states_nums, time_dict):
-        """generate results report - Ours only"""
-        # create dataframe and format
-        chosen_num_df = pd.DataFrame(chosen_states_nums)
+        # Calculate avg values directly from dataset averages
+        if "avg" not in unseen_results["zs"]:
+            unseen_results["zs"]["avg"] = []
+            unseen_results["Ours"]["avg"] = []
         
-        # create dataframe - Ours only
-        ours_results = {k: v for k, v in aggregate_results.items() if k == "Length" or isinstance(v, dict)}
-        for category in ours_results:
-            if isinstance(ours_results[category], dict):
-                ours_results[category] = {"Ours": ours_results[category].get("Ours", [])}
+        # Calculate average of all datasets in current directory
+        zs_avg = []
+        ours_avg = []
+        for u in unseen:
+            if u in unseen_results["zs"] and len(unseen_results["zs"][u]) > 0:
+                zs_avg.append(unseen_results["zs"][u][-1])  # Most recently added value
+            
+            if u in unseen_results["Ours"] and len(unseen_results["Ours"][u]) > 0:
+                ours_avg.append(unseen_results["Ours"][u][-1])  # Most recently added value
         
-        df = pd.DataFrame(ours_results)
+        if zs_avg:
+            unseen_results['zs']['avg'].append(sum(zs_avg) / len(zs_avg))
         
-        # process time information
-        time_df = pd.DataFrame(time_dict).T
+        if ours_avg:
+            unseen_results['Ours']['avg'].append(sum(ours_avg) / len(ours_avg))
 
-        # format function
+    def _generate_results_report(self, unseen_results, unseen_chosen_states_nums, unseen_time_dict):
+        """Generate results report for unseen datasets - including only Ours and zs"""
+        # Create and format dataframes
+        unseen_chosen_num_df = pd.DataFrame(unseen_chosen_states_nums)
+        
+        # Filter results to include only Ours
+        filtered_results = {"Ours": unseen_results["Ours"]}
+        
+        unseen_df = pd.DataFrame(filtered_results).T
+        unseen_time_df = pd.DataFrame(unseen_time_dict).T
+
+        # Formatting function
         def format_cell(cell, digit_num=1):
             if isinstance(cell, list):
                 mean = np.mean(cell)
                 std = np.std(cell)
                 return f"{mean:.{digit_num}f} ± {std:.{digit_num}f}"
-            return str(cell)
+            return f"{cell:.{digit_num}f}" if isinstance(cell, (int, float)) else str(cell)
 
-        # apply formatting
-        df_formatted = df.map(format_cell)
-        chosen_num_df_formatted = chosen_num_df.map(format_cell)
-        time_df_formatted = time_df.map(format_cell, digit_num=3)
+        # Apply formatting
+        unseen_df_formatted = unseen_df.map(format_cell)
+        unseen_num_df_formatted = unseen_chosen_num_df.map(format_cell)
+        unseen_time_df_formatted = unseen_time_df.map(format_cell, digit_num=3)
 
-        # print results
-        # print(chosen_num_df_formatted)
-        # print("\n")
-        print("[In-domain Dataset Results]")
+        # Print results
+        print("[Unseen Dataset Results]")
+        # print("\nChosen States Numbers:")
+        # print(unseen_num_df_formatted)
         print("\n[Time Statistics]")
-        print(time_df_formatted)
+        print(unseen_time_df_formatted)
         print("\n[Accuracy Results]")
-        print(df_formatted)
-
-
-    def _plot_performance_distribution(self, aggregate_results, model):
-        """plot performance distribution"""
-        category = ["math", "nlu", "reasoning", "knowledge", "safety"]
-        pre_performance_list = []
-        post_performance_list = []
-
-        for c in category:
-            pre_performance_list.append(sum(aggregate_results[c]['zs'])/3)
-            post_performance_list.append(sum(aggregate_results[c]['Ours'])/3)
-
-        self._create_performance_plot(
-            pre_performance_list, post_performance_list, model)
-
-    def _create_performance_plot(self, pre_performance_list, post_performance_list, model):
-        """create performance comparison plot"""
-        category = ['Math', 'NLU', 'Reasoning', 'Knowledge', 'Safety']
-        bar_width = 0.4
-        r1 = np.arange(len(category))
-        r2 = [x + bar_width for x in r1]
-
-        fig, ax = plt.subplots(figsize=(23, 23))
-        ax.bar(r1, pre_performance_list, color='skyblue',
-               width=bar_width, label='Zero-shot')
-        ax.bar(r2, post_performance_list, color='slateblue',
-               width=bar_width, label='ELICIT')
-
-        self._format_performance_plot(ax, category, bar_width,
-                                      pre_performance_list, post_performance_list)
-        plt.savefig(f"plots/performance_distribution_{model}.png")
-        plt.close()
-
-    def _format_performance_plot(self, ax, category, bar_width,
-                                 pre_performance_list, post_performance_list):
-        """format performance plot"""
-        ax.set_ylabel('Accuracy', fontweight='bold', fontsize=52)
-        plt.xticks(fontsize=52)
-        plt.yticks(fontsize=52)
-        ax.set_xticks([r + bar_width/2 for r in range(len(category))])
-        ax.set_xticklabels([c.capitalize() for c in category])
-        ax.legend(fontsize=52)
-
-        self._add_value_labels(ax)
-        self._highlight_math_difference(ax, bar_width,
-                                        pre_performance_list[0], post_performance_list[0])
-        plt.tight_layout()
-
-    @staticmethod
-    def _add_value_labels(ax, spacing=5):
-        """add numerical labels to bar chart"""
-        for rect in ax.patches:
-            y_value = rect.get_height()
-            x_value = rect.get_x() + rect.get_width() / 2
-            space = spacing if y_value >= 0 else -spacing
-            va = 'bottom' if y_value >= 0 else 'top'
-
-            ax.annotate(
-                f"{y_value:.1f}",
-                (x_value, y_value),
-                xytext=(0, space),
-                textcoords="offset points",
-                ha='center',
-                va=va,
-                fontsize=45
-            )
-
-    @staticmethod
-    def _highlight_math_difference(ax, bar_width, math_pre, math_post):
-        """highlight the difference in the math category"""
-        math_diff = math_post - math_pre
-        rect = plt.Rectangle(
-            (bar_width/2, math_pre),
-            bar_width,
-            math_diff,
-            fill=False,
-            edgecolor='red',
-            linestyle='--',
-            linewidth=10
-        )
-        ax.add_patch(rect)
-
+        print(unseen_df_formatted)
 
 def main():
     """main function"""

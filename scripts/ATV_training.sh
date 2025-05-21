@@ -49,9 +49,7 @@ for lr in 5e-4; do
                 
                 # Actual command configuration (original cmd variable content)
                 cmd="python ATV_training.py \
-                --dataset_name mmlu_pro_math \
                 --model_name meta-llama/Meta-Llama-3-8B \
-                --state_dir library_results/llama3 \
                 --test_samples 90 \
                 --save_dir eval_results/training_ATV/adapICV_top1_${weight_fv}_${seed}_${weight_decay} \
                 --weight_ori 1.0 \

@@ -2421,7 +2421,7 @@ def construct_arc_challenge():
         json.dump(final_data, f, indent=4)
 
 def construct_bbh():
-    for subset in ["reasoning_about_colored_objects", "object_counting", "boolean_expressions", "date_understanding", "temporal_sequences", "logical_deduction_five_objects", ]:
+    for subset in ["reasoning_about_colored_objects", "boolean_expressions", "date_understanding", "temporal_sequences", "logical_deduction_five_objects", ]:
         data = datasets.load_dataset("lukaemon/bbh", subset)
         all_data = list(data["test"])
         random.shuffle(all_data)
@@ -2509,7 +2509,7 @@ def construct_mmlu_pro_tweet():
 
 
 def construct_ethics():
-    for subset in ["commonsense", "virtue", "justice"]:
+    for subset in ["commonsense", "justice"]:
         data = datasets.load_dataset("hendrycks/ethics", subset)
         labels = {
             0: "No",
@@ -2521,7 +2521,7 @@ def construct_ethics():
         def process_single(data_list):
             processed_data = []
             for data in data_list:
-                if subset in ["justice", "virtue"]:
+                if subset in ["justice"]:
                     input = data["scenario"]
                 else:
                     input = data["input"]

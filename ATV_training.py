@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from collections import defaultdict
 from utils.model_utils import seed_everything
-from train_retriever import *
 import re
 import argparse
 import pandas as pd
@@ -1101,8 +1100,6 @@ class Retrieve_Evaluator:
         print(f"After filtering: {len(train_data)} train, {len(val_data)} validation, {len(test_data)} test examples")
 
         # Model initialization (same as before)
-        save_dir = "./results/ICV"
-        os.makedirs(save_dir, exist_ok=True)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         gpt2_model = GPT2Model.from_pretrained("gpt2").to(device)
